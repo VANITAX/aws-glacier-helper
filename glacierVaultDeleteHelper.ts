@@ -16,7 +16,7 @@ import type { GlacierClient as GlacierClientType } from '@aws-sdk/client-glacier
 import type { Region } from '@aws-sdk/client-ec2';
 
 import confirm from '@inquirer/confirm';
-import select, { Separator } from '@inquirer/select';
+import select from '@inquirer/select';
 
 const DEFAULT_REGION = 'us-east-1';
 const DEFAULT_CHECK_INTERVAL = 3600000; // 每小時檢查一次
@@ -138,7 +138,7 @@ function checkGlacierVaultInventoryRetrievalJobStatus(args: CheckJobStatusArgs) 
         console.log('Vault Name:', vaultName);
         console.log('Job ID:', jobId);
         console.log('Job not yet completed. Checking again in 1 hour...');
-        if (/^d+/.test((intervalMs as number) + '') && intervalMs >= MIN_CHECK_INTERVAL) {
+        if (intervalMs >= MIN_CHECK_INTERVAL) {
           const timer = setTimeout(() => {
             clearTimeout(timer);
             checkGlacierVaultInventoryRetrievalJobStatus(args);
@@ -195,7 +195,7 @@ async function deleteVaultArchives(
 
 async function main() {
   const argIntervalMsIndex = process.argv.findIndex(item => item === '--check-interval-ms');
-  const argIntervalMs = process.argv[argIntervalMsIndex + 1];
+  const argIntervalMs = argIntervalMsIndex > 1 ? process.argv?.[argIntervalMsIndex + 1] : DEFAULT_CHECK_INTERVAL;
   console.log('welcome to using glacier vault delete helper.');
   const regions = await getRegions();
   if (!regions) return terminateProcess();
@@ -275,17 +275,11 @@ async function main() {
     jobId = (await startGlacierVaultInventoryRetrieval(client, selectedVault)) as string;
   }
 
-  const autoDeleteArchiveAnswer = await confirm({
-    message: 'would you want to continue to delete the vault archives automation? [yes/no]: ',
-  });
-
-  if (!autoDeleteArchiveAnswer) terminateProcess();
-
   const completeJobId = await checkGlacierVaultInventoryRetrievalJobStatus({
     glacierClient: client,
     vaultName: selectedVault,
     jobId,
-    intervalMs: Number(argIntervalMs) as number,
+    intervalMs: Number(argIntervalMs),
   });
 
   const archivesList = await getVaultArchives(client, selectedVault, completeJobId);
